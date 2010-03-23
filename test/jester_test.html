@@ -6,9 +6,8 @@
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
     <title>jester.js</title>
     <script language="JavaScript" type="text/javascript" src="jsunit/app/jsUnitCore.js"></script>
-    <script language="JavaScript" type="text/javascript" src="../prototype.js"></script>
+    <script language="JavaScript" type="text/javascript" src="../lib/underscore.js"></script>
     <script language="JavaScript" type="text/javascript" src="../jester.js"></script>
-    <script language="JavaScript" type="text/javascript" src="../firebug/firebug.js"></script>
   </head>
 
   <body>
@@ -136,8 +135,8 @@ function setUp () {
   Internet = {}
 
   // Remote models
-  Resource.model("User", {prefix: "http://www.thoughtbot.com", format: "json"})
-  Resource.model("Post", {prefix: "http://www.thoughtbot.com", format: "json"})
+  Resource.model("User", {prefix: "http://chunkybacon029292.com", format: "json"})
+  Resource.model("Post", {prefix: "http://chunkybacon029292.com", format: "json"})
 
   Internet[User._show_url(1)] = "jesterCallback(" + ericJSON + ");";
   Internet[Post._show_url(1)] = "jesterCallback(" + postJSON + ");";
@@ -539,7 +538,7 @@ function testSaveWithExtraParams() {
   assert(! eric.new_record());
 
   Ajax = { Request : function (url, options) {
-    assert(url.include("extraOption=blah"));
+    assert(_(url).strinclude("extraOption=blah"));
     this.transport = { status : 200 };
   }};
 
@@ -633,6 +632,13 @@ function testUpdateAttributes() {
     'first_name' : 'todd',
     'admin' : false
   }
+
+  Ajax = { Request : function (url, options) {
+    this.transport = {
+      status: 200
+	}
+  }};
+
   oldAttrs = eric.attributes();
   eric.updateAttributes(newAttrs);
   assertEquals('first_name attribute not updated.', 'todd', eric.first_name);

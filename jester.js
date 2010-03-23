@@ -6,8 +6,12 @@
 // Copyright 2007, thoughtbot, inc.
 // Released under the MIT License.
 
-Jester = {}
+var Jester = {}
 Jester.Resource = function(){};
+
+Jester.AjaxHandler = function(url, options) {
+	return new Ajax.Request(url, options).transport;
+}
 
 // Doing it this way forces the validation of the syntax but gives flexibility enough to rename the new class.
 Jester.Constructor = function(model){
@@ -21,12 +25,12 @@ Jester.Constructor = function(model){
 // universal Jester callback holder for remote JSON loading
 var jesterCallback = null;
 
-Object.extend(Jester.Resource, {
+_.extend(Jester.Resource, {
   model: function(model, options)
   {
     var new_model = null;
     new_model = eval(model + " = " + Jester.Constructor(model));
-    Object.extend(new_model, Jester.Resource);
+    _.extend(new_model, Jester.Resource);
     new_model.prototype = new Jester.Resource();
 
     // We delay instantiating XML.ObjTree() so that it can be listed at the end of this file instead of the beginning
@@ -38,13 +42,13 @@ Object.extend(Jester.Resource, {
 
     var default_options = {
       format:   "xml",
-      singular: model.underscore(),
+      singular: _(model).underscore(),
       name:     model,
       defaultParams: {}
     }
-    options              = Object.extend(default_options, options);
+    options              = _.extend(default_options, options);
     options.format       = options.format.toLowerCase();
-    options.plural       = options.singular.pluralize(options.plural);
+    options.plural       = _(options.singular).pluralize(options.plural);
     options.singular_xml = options.singular.replace(/_/g, "-");
     options.plural_xml   = options.plural.replace(/_/g, "-");
     options.remote       = false;
@@ -63,7 +67,7 @@ Object.extend(Jester.Resource, {
     options.prefix = options.prefix.replace(/\b\/+$/,"");
 
     // Establish custom URLs
-    options.urls = Object.extend(this._default_urls(options), options.urls);
+    options.urls = _.extend(this._default_urls(options), options.urls);
 
     // Assign options to model
     new_model.name = model;
@@ -162,12 +166,12 @@ Object.extend(Jester.Resource, {
 
     if (options.asynchronous) {
       options.onComplete = function(transport, json) {user_callback(callback(transport), json);}
-      return new Ajax.Request(url, options).transport;
+      return Jester.AjaxHandler(url, options); 
     }
     else
     {
       options.asynchronous = false; // Make sure it's set, to avoid being overridden.
-      return callback(new Ajax.Request(url, options).transport);
+      return callback(Jester.AjaxHandler(url, options));
     }
   },
 
@@ -193,24 +197,24 @@ Object.extend(Jester.Resource, {
     });
 
     var findOneWork = bind(this, function(doc) {
-      if (!doc) return null;
+      if (!doc) 
+		return null;
 
       var base = this._loadSingle(doc);
-
       // if there were no properties, it was probably not actually loaded
-      if (!base || base._properties.length == 0) return null;
+      if (!base || base._properties.length == 0) 
+		return null;
 
       // even if the ID didn't come back, we obviously knew the ID to search with, so set it
-      if (!base._properties.include("id")) base._setAttribute("id", parseInt(id))
+      if (!_(base._properties).include("id"))
+		base._setAttribute("id", parseInt(id))
 
       return base;
     });
-
     if (id == "first" || id == "all") {
       var url = this._list_url(params);
       return this.requestAndParse(this._format, findAllWork, url, {}, callback, this._remote);
-    }
-    else {
+    } else {
       if (isNaN(parseInt(id))) return null;
       if (!params) params = {};
       params.id = id;
@@ -278,13 +282,12 @@ Object.extend(Jester.Resource, {
 
   _interpolate: function(string, params) {
     if (!params) return string;
-
     var result = string;
-    params.each(function(pair) {
-      var re = new RegExp(":" + pair.key, "g");
+    _(params).each(function(value, key) {
+      var re = new RegExp(":" + key, "g");
       if (result.match(re)) {
-        result = result.replace(re, pair.value);
-        params.unset(pair.key);
+        result = result.replace(re, value);
+        delete params[key];
       }
     });
     return result;
@@ -295,12 +298,9 @@ Object.extend(Jester.Resource, {
     // if an integer is sent, it's assumed just the ID is a parameter
     if (typeof(params) == "number") params = {id: params}
 
-    params = Object.extend(Object.clone(this._defaultParams), params);
-
-    if (params) params = $H(params);
-
-    var url = this._interpolate(this._prefix + this._urls[action], params)
-    return url + (params && params.any() ? "?" + params.toQueryString() : "");
+    params = _(_(this._defaultParams).clone()).extend(params);
+    var url = this._interpolate(this._prefix + this._urls[action], params);
+    return url + (params && !(true == _(params).isEmpty()) ? "?" + _(params).toQueryString() : "");
   },
 
   _default_urls : function(options) {
@@ -342,8 +342,10 @@ Object.extend(Jester.Resource, {
 
   // Converts the XML tree returned from a single object into a hash of attribute values
   _attributesFromTree : function(elements) {
-    var attributes = {}
+    var attributes = {};
+	x = 0;
     for (var attr in elements) {
+	x++;
       // pull out the value
       var value = elements[attr];
       if (elements[attr] && elements[attr]["@type"]) {
@@ -388,27 +390,26 @@ Object.extend(Jester.Resource, {
         if (relation[singular] && typeof(relation[singular]) == "object" && i == 1) {
           var value = [];
           var plural = attr;
-          var name = singular.camelize().capitalize();
+          var name = _(_(singular).camelize()).capitalize();
 
           // force array
           if (!(elements[plural][singular].length > 0))
             elements[plural][singular] = [elements[plural][singular]];
-
-          elements[plural][singular].each( bind(this, function(single) {
-            // if the association hasn't been modeled, do a default modeling here
-            // hosted object's prefix and format are inherited, singular and plural are set
-            // from the XML
-            if (eval("typeof(" + name + ")") == "undefined") {
-              Jester.Resource.model(name, {prefix: this._prefix, singular: singular, plural: plural, format: this._format});
-            }
-            var base = eval(name + ".build(this._attributesFromTree(single))");
-            value.push(base);
-          }));
+			_(elements[plural][singular]).each(_.bind(function(single) {
+				  // if the association hasn't been modeled, do a default modeling here
+				  // hosted object's prefix and format are inherited, singular and plural are set
+				  // from the XML
+				  if (eval("typeof(" + name + ")") == "undefined") {
+				    Jester.Resource.model(name, {prefix: this._prefix, singular: singular, plural: plural, format: this._format});
+				  }
+				  var base = eval(name + ".build(this._attributesFromTree(single))");
+				  value.push(base);
+			}, this));
         }
         // has_one or belongs_to
         else {
           singular = attr;
-          var name = singular.capitalize();
+          var name = _(singular).capitalize();
 
           // if the association hasn't been modeled, do a default modeling here
           // hosted object's prefix and format are inherited, singular is set from the XML
@@ -422,6 +423,8 @@ Object.extend(Jester.Resource, {
       // transform attribute name if needed
       attribute = attr.replace(/-/g, "_");
       attributes[attribute] = value;
+      if(x == 5)
+		break;
     }
 
     return attributes;
@@ -433,14 +436,15 @@ Object.extend(Jester.Resource, {
       attributes = this._attributesFromJSON(doc);
     else
       attributes = this._attributesFromTree(doc[this._singular_xml]);
-
+	
     return this.build(attributes);
   },
 
   _loadCollection : function(doc) {
     var collection;
+	console.log(doc);
     if (this._format == "json") {
-      collection = doc.map( bind(this, function(item) {
+      collection = _(doc).map( bind(this, function(item) {
         return this.build(this._attributesFromJSON(item));
       }));
     }
@@ -449,7 +453,7 @@ Object.extend(Jester.Resource, {
       if (!Jester.Resource.elementHasMany(doc[this._plural_xml]))
         doc[this._plural_xml][this._singular_xml] = [doc[this._plural_xml][this._singular_xml]];
 
-      collection = doc[this._plural_xml][this._singular_xml].map( bind(this, function(elem) {
+      collection = _(doc[this._plural_xml][this._singular_xml]).map( bind(this, function(elem) {
         return this.build(this._attributesFromTree(elem));
       }));
     }
@@ -458,7 +462,7 @@ Object.extend(Jester.Resource, {
 
 });
 
-Object.extend(Jester.Resource.prototype, {
+_.extend(Jester.Resource.prototype, {
   initialize : function(attributes) {
     // Initialize no attributes, no associations
     this._properties = [];
@@ -477,7 +481,7 @@ Object.extend(Jester.Resource.prototype, {
   after_initialization: function(){},
 
   new_record : function() {return !(this.id);},
-  valid : function() {return ! this.errors.any();},
+  valid : function() {return true == _(this.errors).isEmpty();},
 
   reload : function(callback) {
     var reloadWork = bind(this, function(copy) {
@@ -523,7 +527,7 @@ Object.extend(Jester.Resource.prototype, {
 
     // collect params from instance if we're being called as an instance method
     if (this._properties !== undefined) {
-      (this._properties).each( bind(this, function(value, i) {
+      _(this._properties).each( bind(this, function(value, i) {
         if (params[value] === undefined) {
           params[value] = this[value];
         }
@@ -553,7 +557,7 @@ Object.extend(Jester.Resource.prototype, {
     var saveWork = bind(this, function(transport) {
       var saved = false;
 
-      if (transport.responseText && (transport.responseText.strip() != "")) {
+      if (transport.responseText && (_(transport.responseText).strip() != "")) {
         var errors = this._errorsFrom(transport.responseText);
         if (errors)
           this._setErrors(errors);
@@ -593,11 +597,11 @@ Object.extend(Jester.Resource.prototype, {
 
     // collect params
     var objParams = {};
-    var urlParams = Object.clone(this.klass._defaultParams);
+    var urlParams = _.clone(this.klass._defaultParams);
     if (params) {
-      Object.extend(urlParams, params);
+      _.extend(urlParams, params);
     }
-    (this._properties).each( bind(this, function(value, i) {
+    _(this._properties).each( bind(this, function(value, i) {
       objParams[this.klass._singular + "[" + value + "]"] = this[value];
       urlParams[value] = this[value];
     }));
@@ -618,7 +622,7 @@ Object.extend(Jester.Resource.prototype, {
 
   setAttributes : function(attributes)
   {
-    $H(attributes).each(bind(this, function(attr){ this._setAttribute(attr.key, attr.value) }));
+    _(attributes).each(_.bind(function(value, key){ this._setAttribute(key, value); }, this));
     return attributes;
   },
 
@@ -672,7 +676,7 @@ Object.extend(Jester.Resource.prototype, {
     if (!(json && json.constructor == Array && json[0] && json[0].constructor == Array)) return false;
 
     return json.map(function(pair) {
-      return pair[0].capitalize() + " " + pair[1];
+      return _(pair[0]).capitalize() + " " + pair[1];
     });
   },
 
@@ -686,7 +690,7 @@ Object.extend(Jester.Resource.prototype, {
       if (typeof(doc.errors.error) == "string")
         doc.errors.error = [doc.errors.error];
 
-      doc.errors.error.each(function(value, index) {
+      _(doc.errors.error).each(function(value, index) {
         errors.push(value);
       });
 
@@ -730,13 +734,13 @@ Object.extend(Jester.Resource.prototype, {
 
   _setProperty : function(property, value) {
     this[property] = value;
-    if (!(this._properties.include(property)))
+    if (!(_(this._properties).include(property)))
       this._properties.push(property);
   },
 
   _setAssociation : function(association, value) {
     this[association] = value;
-    if (!(this._associations.include(association)))
+    if (!(_(this._associations).include(association)))
       this._associations.push(association);
   },
 
@@ -789,16 +793,13 @@ Jester.Resource.elementHasMany = function(element) {
 // bug in the javascript interpreter.
 
 function bind(context, func) {
-  var __method = func, args = $A(func.arguments), object = context;
-
-  return function() {
-    return __method.apply(object, args.concat($A(arguments)));
-  }
+	return _.bind(func, context);
 }
 
 // If there is no object already called Resource, we define one to make things a little cleaner for us.
-if(typeof(Resource) == "undefined")
-  Resource = Jester.Resource;
+if(typeof(Resource) == "undefined") {
+  var Resource = Jester.Resource;
+}
 
 
 
@@ -809,45 +810,6 @@ if(typeof(Resource) == "undefined")
   Its home page can be found at: http://code.google.com/p/inflection-js/
 */
 
-if (!String.prototype.pluralize) String.prototype.pluralize = function(plural) {
-  var str=this;
-  if(plural)str=plural;
-  else {
-    var uncountable_words=['equipment','information','rice','money','species','series','fish','sheep','moose'];
-    var uncountable=false;
-    for(var x=0;!uncountable&&x<uncountable_words.length;x++)uncountable=(uncountable_words[x].toLowerCase()==str.toLowerCase());
-    if(!uncountable) {
-      var rules=[
-        [new RegExp('(m)an$','gi'),'$1en'],
-        [new RegExp('(pe)rson$','gi'),'$1ople'],
-        [new RegExp('(child)$','gi'),'$1ren'],
-        [new RegExp('(ax|test)is$','gi'),'$1es'],
-        [new RegExp('(octop|vir)us$','gi'),'$1i'],
-        [new RegExp('(alias|status)$','gi'),'$1es'],
-        [new RegExp('(bu)s$','gi'),'$1ses'],
-        [new RegExp('(buffal|tomat)o$','gi'),'$1oes'],
-        [new RegExp('([ti])um$','gi'),'$1a'],
-        [new RegExp('sis$','gi'),'ses'],
-        [new RegExp('(?:([^f])fe|([lr])f)$','gi'),'$1$2ves'],
-        [new RegExp('(hive)$','gi'),'$1s'],
-        [new RegExp('([^aeiouy]|qu)y$','gi'),'$1ies'],
-        [new RegExp('(x|ch|ss|sh)$','gi'),'$1es'],
-        [new RegExp('(matr|vert|ind)ix|ex$','gi'),'$1ices'],
-        [new RegExp('([m|l])ouse$','gi'),'$1ice'],
-        [new RegExp('^(ox)$','gi'),'$1en'],
-        [new RegExp('(quiz)$','gi'),'$1zes'],
-        [new RegExp('s$','gi'),'s'],
-        [new RegExp('$','gi'),'s']
-      ];
-      var matched=false;
-      for(var x=0;!matched&&x<=rules.length;x++) {
-        matched=str.match(rules[x][0]);
-        if(matched)str=str.replace(rules[x][0],rules[x][1]);
-      }
-    }
-  }
-  return str;
-};
 
 /*
 
@@ -875,3 +837,98 @@ Compressed using http://dean.edwards.name/packer/.
 */
 
 eval(function(p,a,c,k,e,r){e=function(c){return(c<a?'':e(parseInt(c/a)))+((c=c%a)>35?String.fromCharCode(c+29):c.toString(36))};if(!''.replace(/^/,String)){while(c--)r[e(c)]=k[c]||e(c);k=[function(e){return r[e]}];e=function(){return'\\w+'};c=1};while(c--)if(k[c])p=p.replace(new RegExp('\\b'+e(c)+'\\b','g'),k[c]);return p}('N.q.F||(N.q.F=t(a){o u.1d().F(a)});O.q.F||(O.q.F=t(a){o\'0\'.1H(a-u.K)+u});O.q.1H||(O.q.1H=t(a){v s=\'\',i=0;2k(i++<a){s+=u}o s});N.q.1j||(N.q.1j=t(){o u.1d().1j()});O.q.1j||(O.q.1j=t(){v n=u,l=n.K,i=-1;2k(i++<l){u.20(i,i+1)==0?n=n.20(1,n.K):i=l}o n});k.1m="2H 2F 2z 2y 2x 2u 2r 3q 3n 3k 3i 3d".1x(" ");k.1o="38 35 2Y 2U 2Q 2O 2M".1x(" ");k.2K="31 28 31 30 31 30 31 31 30 31 30 31".1x(" ");k.1A={2G:"%Y-%m-%d %H:%M:%S",2w:"%Y-%m-%2v%H:%M:%S%T",2s:"%a, %d %b %Y %H:%M:%S %Z",3p:"%d %b %H:%M",3o:"%B %d, %Y %H:%M"};k.3l=-1;k.3j=-2;(t(){v d=k;d["3h"]=1;d["2i"]=1t;d["2h"]=d["2i"]*19;d["2e"]=d["2h"]*19;d["P"]=d["2e"]*24;d["37"]=d["P"]*7;d["34"]=d["P"]*31;d["1q"]=d["P"]*2X;d["2W"]=d["1q"]*10;d["2R"]=d["1q"]*23;d["2P"]=d["1q"]*1t})();k.q.1D||(k.q.1D=t(){o D k(u.1k())});k.q.26||(k.q.26=t(a,b){u.1F(u.1k()+((a||k.P)*(b||1)));o u});k.q.2a||(k.q.2a=t(a,b){u.1F(u.1k()-((a||k.P)*(b||1)));o u});k.q.1Z||(k.q.1Z=t(){u.1Y(0);u.1X(0);u.1U(0);u.1T(0);o u});k.q.1I||(k.q.1I=t(a,b){C(1i a==\'1p\')a=k.1J(a);o 18.2l((u.1k()-a.1k())/(b|k.P))});k.q.1N||(k.q.1N=k.q.1I);k.q.2n||(k.q.2n=t(){d=O(u);o d.1f(-(18.1y(d.K,2)))>3&&d.1f(-(18.1y(d.K,2)))<21?"V":["V","17","16","1a","V"][18.1y(N(d)%10,4)]});k.q.1w||(k.q.1w=t(){v f=(D k(u.1h(),0,1)).1e();o 18.2t((u.1n()+(f>3?f-4:f+3))/7)});k.q.1M=t(){o u.1d().1v(/^.*? ([A-Z]{3}) [0-9]{4}.*$/,"$1").1v(/^.*?\\(([A-Z])[a-z]+ ([A-Z])[a-z]+ ([A-Z])[a-z]+\\)$/,"$1$2$3")};k.q.2p=t(){o(u.1u()>0?"-":"+")+O(18.2l(u.1u()/19)).F(2)+O(u.1u()%19,2,"0").F(2)};k.q.1n||(k.q.1n=t(){o((k.2o(u.1h(),u.1c(),u.1b()+1,0,0,0)-k.2o(u.1h(),0,1,0,0,0))/k.P)});k.q.2m||(k.q.2m=t(){v a=u.1D();a.15(a.1c()+1);a.L(0);o a.1b()});k.2j||(k.2j=t(a,b){a=(a+12)%12;C(k.1K(b)&&a==1)o 29;o k.3g.3f[a]});k.1K||(k.1K=t(a){o(((a%4)==0)&&((a%23)!=0)||((a%3e)==0))});k.q.1B||(k.q.1B=t(c){C(!u.3c())o\'&3b;\';v d=u;C(k.1A[c.2g()])c=k.1A[c.2g()];o c.1v(/\\%([3a])/g,t(a,b){39(b){E\'a\':o k.1l(d.1e()).1f(0,3);E\'A\':o k.1l(d.1e());E\'b\':o k.13(d.1c()).1f(0,3);E\'B\':o k.13(d.1c());E\'c\':o d.1d();E\'d\':o d.1b().F(2);E\'H\':o d.1G().F(2);E\'I\':o((h=d.1G()%12)?h:12).F(2);E\'j\':o d.1n().F(3);E\'m\':o(d.1c()+1).F(2);E\'M\':o d.36().F(2);E\'p\':o d.1G()<12?\'33\':\'32\';E\'S\':o d.2Z().F(2);E\'U\':o d.1w().F(2);E\'W\':R Q("%W 2V 2T 2S 25");E\'w\':o d.1e();E\'x\':o d.1r("%m/%d/%Y");E\'X\':o d.1r("%I:%M%p");E\'y\':o d.1h().1d().1f(2);E\'Y\':o d.1h();E\'T\':o d.2p();E\'Z\':o d.1M()}})});k.q.1r||(k.q.1r=k.q.1B);k.22=k.1J;k.1J=t(a){C(1i a!=\'1p\')o a;C(a.K==0||(/^\\s+$/).1E(a))o;2N(v i=0;i<k.1g.K;i++){v r=k.1g[i].J.2L(a);C(r)o k.1g[i].G(r)}o D k(k.22(a))};k.13||(k.13=t(c){v d=-1;C(1i c==\'2J\'){o k.1m[c.1c()]}2I C(1i c==\'27\'){d=c-1;C(d<0||d>11)R D Q("1s 1C 2b 2q 1W 1V 2d 1 2c 12:"+d);o k.1m[d]}v m=k.1m.1S(t(a,b){C(D 1O("^"+c,"i").1E(a)){d=b;o 1R}o 2f});C(m.K==0)R D Q("1s 1C 1p");C(m.K>1)R D Q("1Q 1C");o k.1m[d]});k.1l||(k.1l=t(c){v d=-1;C(1i c==\'27\'){d=c-1;C(d<0||d>6)R D Q("1s 1z 2b 2q 1W 1V 2d 1 2c 7");o k.1o[d]}v m=k.1o.1S(t(a,b){C(D 1O("^"+c,"i").1E(a)){d=b;o 1R}o 2f});C(m.K==0)R D Q("1s 1z 1p");C(m.K>1)R D Q("1Q 1z");o k.1o[d]});k.1g||(k.1g=[{J:/(\\d{1,2})\\/(\\d{1,2})\\/(\\d{2,4})/,G:t(a){v d=D k();d.1L(a[3]);d.L(14(a[2],10));d.15(14(a[1],10)-1);o d}},{J:/(\\d{4})(?:-?(\\d{2})(?:-?(\\d{2})(?:[T ](\\d{2})(?::?(\\d{2})(?::?(\\d{2})(?:\\.(\\d+))?)?)?(?:Z|(?:([-+])(\\d{2})(?::?(\\d{2}))?)?)?)?)?)?/,G:t(a){v b=0;v d=D k(a[1],0,1);C(a[2])d.15(a[2]-1);C(a[3])d.L(a[3]);C(a[4])d.1Y(a[4]);C(a[5])d.1X(a[5]);C(a[6])d.1U(a[6]);C(a[7])d.1T(N("0."+a[7])*1t);C(a[9]){b=(N(a[9])*19)+N(a[10]);b*=((a[8]==\'-\')?1:-1)}b-=d.1u();1P=(N(d)+(b*19*1t));d.1F(N(1P));o d}},{J:/^2E/i,G:t(){o D k()}},{J:/^2D/i,G:t(){v d=D k();d.L(d.1b()+1);o d}},{J:/^2C/i,G:t(){v d=D k();d.L(d.1b()-1);o d}},{J:/^(\\d{1,2})(17|16|1a|V)?$/i,G:t(a){v d=D k();d.L(14(a[1],10));o d}},{J:/^(\\d{1,2})(?:17|16|1a|V)? (\\w+)$/i,G:t(a){v d=D k();d.L(14(a[1],10));d.15(k.13(a[2]));o d}},{J:/^(\\d{1,2})(?:17|16|1a|V)? (\\w+),? (\\d{4})$/i,G:t(a){v d=D k();d.L(14(a[1],10));d.15(k.13(a[2]));d.1L(a[3]);o d}},{J:/^(\\w+) (\\d{1,2})(?:17|16|1a|V)?$/i,G:t(a){v d=D k();d.L(14(a[2],10));d.15(k.13(a[1]));o d}},{J:/^(\\w+) (\\d{1,2})(?:17|16|1a|V)?,? (\\d{4})$/i,G:t(a){v d=D k();d.L(14(a[2],10));d.15(k.13(a[1]));d.1L(a[3]);o d}},{J:/^3m (\\w+)$/i,G:t(a){v d=D k();v b=d.1e();v c=k.1l(a[1]);v e=c-b;C(c<=b){e+=7}d.L(d.1b()+e);o d}},{J:/^2B (\\w+)$/i,G:t(a){R D Q("2A 25 3r");}}]);',62,214,'||||||||||||||||||||Date||||return||prototype|||function|this|var|||||||if|new|case|zf|handler|||re|length|setDate||Number|String|DAY|Error|throw||||th||||||||parseMonth|parseInt|setMonth|nd|st|Math|60|rd|getDate|getMonth|toString|getDay|substr|__PARSE_PATTERNS|getFullYear|typeof|rz|getTime|parseDay|MONTH_NAMES|getDayOfYear|DAY_NAMES|string|YEAR|format|Invalid|1000|getTimezoneOffset|replace|getWeek|split|min|day|FORMATS|strftime|month|clone|test|setTime|getHours|str|diff|parse|isLeapYear|setYear|getTimezone|compare|RegExp|time|Ambiguous|true|findAll|setMilliseconds|setSeconds|be|must|setMinutes|setHours|clearTime|substring||__native_parse|100||yet|increment|number|||decrement|index|and|between|HOUR|false|toLowerCase|MINUTE|SECOND|daysInMonth|while|floor|lastDayOfMonth|getOrdinal|UTC|getGMTOffset|value|July|rfc822|round|June|dT|iso8601|May|April|March|Not|last|yes|tom|tod|February|db|January|else|object|DAYS_PER_MONTH|exec|Saturday|for|Friday|MILLENNIUM|Thursday|CENTURY|supported|not|Wednesday|is|DECADE|365|Tuesday|getSeconds|||PM|AM|MONTH|Monday|getMinutes|WEEK|Sunday|switch|aAbBcdHIjmMpSUWwxXyYTZ|nbsp|valueOf|December|400|DAYS_IN_MONTH|Convensions|MILLISECOND|November|ERA|October|EPOCH|next|September|long|short|August|implemented'.split('|'),0,{}))
+
+
+/*  Prototype JavaScript framework, version 1.6.1 -- EXERPTS
+ *  (c) 2005-2009 Sam Stephenson
+ *
+ *  Prototype is freely distributable under the terms of an MIT-style license.
+ *  For details, see the Prototype web site: http://www.prototypejs.org/
+ *
+ *--------------------------------------------------------------------------*/
+_.mixin({
+	underscore: function(string) {
+	  return string.replace(/::/g, '/')
+	             .replace(/([A-Z]+)([A-Z][a-z])/g, '$1_$2')
+	             .replace(/([a-z\d])([A-Z])/g, '$1_$2')
+	             .replace(/-/g, '_')
+	             .toLowerCase();
+	},
+	toQueryPair: function (key, value) {
+	  if (_.isUndefined(value)) return key;
+	  return key + '=' + encodeURIComponent(value);
+	},
+	toQueryString: function(obj) {
+	    return _.reduce(obj, [], function(results, pvalue, pkey) {
+	      var key = encodeURIComponent(pkey), values = pvalue;
+
+	      if (values && typeof values == 'object') {
+	        if (_.isArray(values))
+	          return results.concat(_.map(values, _.bind(_.toQueryPair, '', [key])));
+	      } else results.push(_.toQueryPair(key, values));
+	      return results;
+	    }).join('&');
+	},
+	strip: function(string) {
+    	return string.replace(/^\s+/, '').replace(/\s+$/, '');
+  	},
+	pluralize: function(str, plural) {	
+	  if(plural)str=plural;
+	  else {
+	    var uncountable_words=['equipment','information','rice','money','species','series','fish','sheep','moose'];
+	    var uncountable=false;
+	    for(var x=0;!uncountable&&x<uncountable_words.length;x++)uncountable=(uncountable_words[x].toLowerCase()==str.toLowerCase());
+	    if(!uncountable) {
+	      var rules=[
+	        [new RegExp('(m)an$','gi'),'$1en'],
+	        [new RegExp('(pe)rson$','gi'),'$1ople'],
+	        [new RegExp('(child)$','gi'),'$1ren'],
+	        [new RegExp('(ax|test)is$','gi'),'$1es'],
+	        [new RegExp('(octop|vir)us$','gi'),'$1i'],
+	        [new RegExp('(alias|status)$','gi'),'$1es'],
+	        [new RegExp('(bu)s$','gi'),'$1ses'],
+	        [new RegExp('(buffal|tomat)o$','gi'),'$1oes'],
+	        [new RegExp('([ti])um$','gi'),'$1a'],
+	        [new RegExp('sis$','gi'),'ses'],
+	        [new RegExp('(?:([^f])fe|([lr])f)$','gi'),'$1$2ves'],
+	        [new RegExp('(hive)$','gi'),'$1s'],
+	        [new RegExp('([^aeiouy]|qu)y$','gi'),'$1ies'],
+	        [new RegExp('(x|ch|ss|sh)$','gi'),'$1es'],
+	        [new RegExp('(matr|vert|ind)ix|ex$','gi'),'$1ices'],
+	        [new RegExp('([m|l])ouse$','gi'),'$1ice'],
+	        [new RegExp('^(ox)$','gi'),'$1en'],
+	        [new RegExp('(quiz)$','gi'),'$1zes'],
+	        [new RegExp('s$','gi'),'s'],
+	        [new RegExp('$','gi'),'s']
+	      ];
+	      var matched=false;
+	      for(var x=0;!matched&&x<=rules.length;x++) {
+	        matched=str.match(rules[x][0]);
+	        if(matched)str=str.replace(rules[x][0],rules[x][1]);
+	      }
+	    }
+	  }
+	  return str;
+	},
+	capitalize: function(string){
+    	return string.charAt(0).toUpperCase() + string.substring(1).toLowerCase();
+  	},
+   	camelize: function(string) {
+    	var parts = string.split('-'), len = parts.length;
+	    if (len == 1) return parts[0];
+
+	    var camelized = string.charAt(0) == '-'
+	      ? parts[0].charAt(0).toUpperCase() + parts[0].substring(1)
+	      : parts[0];
+
+	    for (var i = 1; i < len; i++)
+	      camelized += parts[i].charAt(0).toUpperCase() + parts[i].substring(1);
+
+	    return camelized;
+  	},
+	strinclude: function (string, pattern) {
+	    return string.indexOf(pattern) > -1;
+	}
+});
+
+console.log("Done loading jester.");

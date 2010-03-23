@@ -1,1 +1,3 @@
 prototype*.js
+test/console_test.html
+.DS_Store
