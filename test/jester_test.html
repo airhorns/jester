@@ -192,11 +192,6 @@ function testFind() {
 
   assertEquals("Attributes should be filled in correctly on find().", 'eric', eric.first_name);
   assert("Boolean attributes should be auto-transformed (when format is XML).", eric.admin);
-  console.log(eric);
-  console.log(eric.created_at);
-  console.log(eric.created_at.constructor);
-  console.log(Date);
-  console.log(Date.constructor);
   assertEquals("Date attributes should be auto-transformed (when format is XML).", Date, eric.created_at.constructor);
   assertEquals("Integer attributes should be auto-transformed (when format is XML).", 1, eric.id);
 
