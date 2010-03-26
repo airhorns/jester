@@ -6,8 +6,13 @@ var Jester = {}
 Jester.Resource = function(){};
 
 Jester.AjaxHandler = function(url, options) {
-	return new Ajax.Request(url, options).transport;
+	if(typeof(Ajax) != 'undefined') {
+		return new Ajax.Request(url, options).transport;
+	} else {
+		return false;
+	}
 }
+Jester.singleOrigin = true;
 
 // Doing it this way forces the validation of the syntax but gives flexibility enough to rename the new class.
 Jester.Constructor = function(model){
@@ -50,7 +55,16 @@ _.extend(Jester.Resource, {
     options.remote       = false;
 
     // Establish prefix
-    var default_prefix = window.location.protocol + "//" + window.location.hostname + (window.location.port ? ":" + window.location.port : "");
+	
+	if(typeof(window) == 'undefined') {
+		var default_prefix = "http://localhost/";
+		
+	} else {
+		
+		var default_prefix = window.location.protocol + "//" + window.location.hostname + (window.location.port ? ":" + window.location.port : "");
+	}
+	
+	
     if (options.prefix && options.prefix.match(/^https?:/))
       options.remote = true;
 
@@ -78,8 +92,10 @@ _.extend(Jester.Resource, {
     if (options.checkNew)
       this.buildAttributes(new_model, options);
 
-    if (window)
+	
+    if (typeof(window) != 'undefined') {
       window[model] = new_model;
+	}
 
     return new_model;
   },
@@ -116,12 +132,12 @@ _.extend(Jester.Resource, {
       url += "&";
     url += "callback=jesterCallback";
     script.src = url;
-
+	
     document.firstChild.appendChild(script);
   },
 
   requestAndParse : function(format, callback, url, options, user_callback, remote) {
-    if (remote && format == "json" && user_callback)
+    if (remote && format == "json" && user_callback && Jester.singleOrigin == true)
       return this.loadRemoteJSON(url, callback, user_callback)
 
     parse_and_callback = null;
@@ -134,6 +150,7 @@ _.extend(Jester.Resource, {
     } else {
       parse_and_callback = function(transport) {
         if (transport.status == 500) return callback(null);
+		console.log(Jester.Tree.parseXML(transport.responseText));
         return callback(Jester.Tree.parseXML(transport.responseText));
       }
     }
@@ -794,29 +811,13 @@ if(typeof(Resource) == "undefined") {
   var Resource = Jester.Resource;
 }
 
-/*
-
-This is a lighter form of ObjTree, with parts Jester doesn't use removed.
-Compressed using http://dean.edwards.name/packer/.
-Homepage: http://www.kawa.net/works/js/xml/objtree-e.html
-
-XML.ObjTree -- XML source code from/to JavaScript object like E4X
-
-Copyright (c) 2005-2006 Yusuke Kawasaki. All rights reserved.
-This program is free software; you can redistribute it and/or
-modify it under the Artistic license. Or whatever license I choose,
-which I will do instead of keeping this documentation like it is.
-
-*/
-
-eval(function(p,a,c,k,e,r){e=function(c){return(c<a?'':e(parseInt(c/a)))+((c=c%a)>35?String.fromCharCode(c+29):c.toString(36))};if(!''.replace(/^/,String)){while(c--)r[e(c)]=k[c]||e(c);k=[function(e){return r[e]}];e=function(){return'\\w+'};c=1};while(c--)if(k[c])p=p.replace(new RegExp('\\b'+e(c)+'\\b','g'),k[c]);return p}('5(p(o)==\'w\')o=v(){};o.r=v(){m 9};o.r.1i="0.1b";o.r.u.14=\'<?L 1s="1.0" 1o="1n-8" ?>\\n\';o.r.u.Y=\'-\';o.r.u.1c=\'1a/L\';o.r.u.N=v(a){6 b;5(W.U){6 c=K U();6 d=c.1r(a,"1p/L");5(!d)m;b=d.A}q 5(W.10){c=K 10(\'1k.1h\');c.1g=z;c.1e(a);b=c.A}5(!b)m;m 9.E(b)};o.r.u.1d=v(c,d,e){6 f={};y(6 g 19 d){f[g]=d[g]}5(!f.M){5(p(f.18)=="w"&&p(f.17)=="w"&&p(f.16)=="w"){f.M="15"}q{f.M="13"}}5(e){f.X=V;6 h=9;6 i=e;6 j=f.T;f.T=v(a){6 b;5(a&&a.x&&a.x.A){b=h.E(a.x.A)}q 5(a&&a.J){b=h.N(a.J)}i(b,a);5(j)j(a)}}q{f.X=z}6 k;5(p(S)!="w"&&S.I){f.1q=c;6 l=K S.I(f);5(l)k=l.12}q 5(p(Q)!="w"&&Q.I){6 l=K Q.I(c,f);5(l)k=l.12}5(e)m k;5(k&&k.x&&k.x.A){m 9.E(k.x.A)}q 5(k&&k.J){m 9.N(k.J)}};o.r.u.E=v(a){5(!a)m;9.H={};5(9.P){y(6 i=0;i<9.P.t;i++){9.H[9.P[i]]=1}}6 b=9.O(a);5(9.H[a.F]){b=[b]}5(a.B!=11){6 c={};c[a.F]=b;b=c}m b};o.r.u.O=v(a){5(a.B==7){m}5(a.B==3||a.B==4){6 b=a.G.1j(/[^\\1f-\\1l]/);5(b==1m)m z;m a.G}6 c;6 d={};5(a.D&&a.D.t){c={};y(6 i=0;i<a.D.t;i++){6 e=a.D[i].F;5(p(e)!="Z")C;6 f=a.D[i].G;5(!f)C;e=9.Y+e;5(p(d[e])=="w")d[e]=0;d[e]++;9.R(c,e,d[e],f)}}5(a.s&&a.s.t){6 g=V;5(c)g=z;y(6 i=0;i<a.s.t&&g;i++){6 h=a.s[i].B;5(h==3||h==4)C;g=z}5(g){5(!c)c="";y(6 i=0;i<a.s.t;i++){c+=a.s[i].G}}q{5(!c)c={};y(6 i=0;i<a.s.t;i++){6 e=a.s[i].F;5(p(e)!="Z")C;6 f=9.O(a.s[i]);5(f==z)C;5(p(d[e])=="w")d[e]=0;d[e]++;9.R(c,e,d[e],f)}}}m c};o.r.u.R=v(a,b,c,d){5(9.H[b]){5(c==1)a[b]=[];a[b][a[b].t]=d}q 5(c==1){a[b]=d}q 5(c==2){a[b]=[a[b],d]}q{a[b][a[b].t]=d}};',62,91,'|||||if|var|||this|||||||||||||return||XML|typeof|else|ObjTree|childNodes|length|prototype|function|undefined|responseXML|for|false|documentElement|nodeType|continue|attributes|parseDOM|nodeName|nodeValue|__force_array|Request|responseText|new|xml|method|parseXML|parseElement|force_array|Ajax|addNode|HTTP|onComplete|DOMParser|true|window|asynchronous|attr_prefix|string|ActiveXObject||transport|post|xmlDecl|get|parameters|postbody|postBody|in|text|24|overrideMimeType|parseHTTP|loadXML|x00|async|XMLDOM|VERSION|match|Microsoft|x20|null|UTF|encoding|application|uri|parseFromString|version'.split('|'),0,{}))
 
 /*  Exerpts from Prototype JavaScript framework, version 1.6.1
  *  (c) 2005-2009 Sam Stephenson
  *
  *  Prototype is freely distributable under the terms of an MIT-style license.
  *  For details, see the Prototype web site: http://www.prototypejs.org/
- *  
+ *
  *  These have been mixed in to the Underscore.js namespace for easy referencing and usage elsewhere.
  *
  *--------------------------------------------------------------------------*/
@@ -904,5 +905,3 @@ _.mixin({
 	    return string.indexOf(pattern) > -1;
 	}
 });
-
-console.log("Done loading jester.");
